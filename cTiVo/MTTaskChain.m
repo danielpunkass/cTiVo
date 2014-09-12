@@ -73,7 +73,7 @@ __DDLOGHERE__
 	}
 	MTTask *currentTask = nil;
 	NSMutableArray *inputPipes = [NSMutableArray array];
-	for (int i=0; i < _taskArray.count; i++) {
+	for (NSUInteger i=0; i < _taskArray.count; i++) {
         fileHandleToTee = nil;
 		currentTasks = _taskArray[i];
 		if (currentTasks.count ==1 ) {
@@ -84,7 +84,7 @@ __DDLOGHERE__
 			}
 		} else {
 			fileHandleToTee = sourceToTee;
-			for (int j=0; j< currentTasks.count; j++) {
+			for (NSUInteger j=0; j< currentTasks.count; j++) {
 				MTTask *nextTask = currentTasks[j];
                 if (nextTask.requiresInputPipe) {
                     NSPipe *pipe = [NSPipe new];
@@ -107,7 +107,7 @@ __DDLOGHERE__
 			} else {
 				NSMutableArray *nextChain = [NSMutableArray array];
                 NSMutableArray *newTaskArray = [NSMutableArray arrayWithArray:_taskArray];
-				for (int k = i+1; k<_taskArray.count; k++) {
+				for (NSUInteger k = i+1; k<_taskArray.count; k++) {
 					[nextChain addObject:_taskArray[k]];
 				}
 				if (nextChain.count) {
@@ -196,7 +196,7 @@ __DDLOGHERE__
 -(void)trackProgress //See if any tasks in this chain are running
 {
     BOOL isRunning = NO;
-    DDLogDetail(@"Tracking task chain");
+    DDLogVerbose(@"Tracking task chain");
     for (NSArray *taskset in _taskArray) {
         for(MTTask *task in taskset) {
             if (task.taskRunning) {
@@ -228,15 +228,20 @@ __DDLOGHERE__
     }
 //    NSLog(@"Total Data Read %ld",totalDataRead);
     NSArray *pipes = [teeBranches objectForKey:notification.object];
+    if (readData.length) {
+        DDLogVerbose(@"Got %ld bytes", readData.length);
+    } else {
+        DDLogMajor(@"Got 0 bytes, and is %@cancelled",_download.isCanceled ? @"" : @"not ");
+    }
 	if (readData.length && !_download.isCanceled) {
         for (NSPipe *pipe in pipes ) {
 			//			NSLog(@"Writing data on %@",pipe == subtitlePipe ? @"subtitle" : @"encoder");
             if (!_download.isCanceled){
 				@try {
-					[[pipe fileHandleForWriting] writeData:readData];
+                    [[pipe fileHandleForWriting] writeData:readData];
 				}
 				@catch (NSException *exception) {
-					DDLogDetail(@"download write fileHandleForWriting fail: %@", exception.reason);
+					DDLogMajor(@"download write fileHandleForWriting fail: %@", exception.reason);
 					if (!_download.isCanceled) {
 						[_download rescheduleOnMain];
 						DDLogDetail(@"Rescheduling");
@@ -265,7 +270,7 @@ __DDLOGHERE__
 		}
 		
 	} else {
-        DDLogMajor(@"Quitting because data length is %ld and canceled is %@",readData.length, _download.isCanceled ? @"is cancelled" : @"is not cancelled");
+        DDLogMajor(@"Really Quitting because data length is %ld and is %@cancelled",readData.length, _download.isCanceled ? @"" : @"not ");
         for (NSPipe *pipe in pipes) {
 			@try{
 				[[pipe fileHandleForWriting] closeFile];
@@ -283,7 +288,7 @@ __DDLOGHERE__
 			@finally {
 			}
 		}
-	}
+    }
 }
 
 -(void)dealloc

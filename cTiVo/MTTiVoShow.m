@@ -118,11 +118,11 @@ __DDLOGHERE__
 		}
 		return;
 	}
-	DDLogDetail(@"getting Detail for %@ at %@",self, _detailURL);
+	DDLogDetail(@"getting Detail for %@ at %@",self, _detailURL );
 	_gotDetails = YES;
 	@autoreleasepool {
 //	NSString *detailURLString = [NSString stringWithFormat:@"https://%@/TiVoVideoDetails?id=%d",_tiVo.tiVo.hostName,_showID];
-//	NSLog(@"Show Detail URL %@",detailURLString);
+//	NSLog(@"Show Detail URL %@", detailURLString );
         NSString *detailFilePath = [NSString stringWithFormat:@"%@/%@_%d_Details.xml",kMTTmpDetailsDir,_tiVo.tiVo.name,_showID];
         NSData *xml = nil;
         if ([[NSFileManager defaultManager] fileExistsAtPath:detailFilePath]) {
@@ -156,6 +156,7 @@ __DDLOGHERE__
     [[NSNotificationCenter defaultCenter] performSelectorOnMainThread:@selector(postNotification:) withObject:notification waitUntilDone:NO];
 	}
 }
+#pragma mark - access theTVDB
 //These will be printed out in alpha order...
 #define kMTVDBNoEpisode @"Episode Not Found"
 #define kMTVDBEpisode @"Episode Found"
@@ -173,7 +174,7 @@ __DDLOGHERE__
 	//type is just for debugging
 	if (zapItID == nil) return nil;
 	DDLogVerbose(@"Trying TVDB: %@==>%@",self.seriesId, zapItID);
-	NSString *urlString = [[NSString stringWithFormat:@"http://thetvdb.com/api/GetSeriesByRemoteID.php?zap2it=%@",zapItID] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+	NSString *urlString = [[NSString stringWithFormat:@"http://thetvdb.com/api/GetSeriesByRemoteID.php?zap2it=%@&language=all",zapItID] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
 	NSURL *url = [NSURL URLWithString:urlString];
 	DDLogVerbose(@"Getting %@ details for %@ using %@",type, self, urlString);
 	NSString *TVDBText = [NSString stringWithContentsOfURL:url encoding:NSUTF8StringEncoding error:nil];
@@ -207,12 +208,13 @@ __DDLOGHERE__
 }
 
 -(NSString *) retrieveTVDBIdFromSeriesName  {
-	NSString * urlString = [[NSString stringWithFormat:@"http://thetvdb.com/api/GetSeries.php?seriesname=%@",_seriesTitle] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+	NSString * urlString = [[NSString stringWithFormat:@"http://thetvdb.com/api/GetSeries.php?seriesname=%@&language=all",_seriesTitle] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
 	NSURL *url = [NSURL URLWithString:urlString];
-	DDLogDetail(@"Getting details for %@ using %@",self,urlString);
+	DDLogDetail(@"Getting series for %@ using %@",self,urlString);
 	NSString *seriesID = [NSString stringWithContentsOfURL:url encoding:NSUTF8StringEncoding error:nil];
 	//This can result in multiple series return only 1 of which is correct.  First break up into Series
 	NSArray *serieses = [seriesID componentsSeparatedByString:@"<Series>"];
+	DDLogVerbose(@"Series for %@: %@",self,serieses);
 	for (NSString *series in serieses) {
 		NSString *seriesName = [[self getStringForPattern:@"<SeriesName>(.*)<\\/SeriesName>" fromString:series] stringByConvertingHTMLToPlainText];
 		if (seriesName && [seriesName caseInsensitiveCompare:self.seriesTitle] == NSOrderedSame) {
@@ -274,6 +276,7 @@ __DDLOGHERE__
 				if (!seriesIDTVDB)  seriesIDTVDB = [self retrieveTVDBIdFromSeriesName];
 				
 				if (seriesIDTVDB) {
+					DDLogDetail(@"Got TVDB for %@: %@ ",self, seriesIDTVDB);
 					[tiVoManager.tvdbSeriesIdMapping setObject:seriesIDTVDB forKey:_seriesTitle];
 				} else {
 					[tiVoManager.tvdbSeriesIdMapping setObject:@"" forKey:_seriesTitle];
@@ -286,7 +289,7 @@ __DDLOGHERE__
             if (seriesIDTVDB.length) {
 				//Now get the details
 				NSString *urlString = [[NSString stringWithFormat:@"http://thetvdb.com/api/GetEpisodeByAirDate.php?apikey=%@&seriesid=%@&airdate=%@",kMTTheTVDBAPIKey,seriesIDTVDB,self.originalAirDateNoTime] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-				DDLogDetail(@"urlString %@",urlString);
+				DDLogDetail(@"Getting TVDB details @ %@",urlString);
 				NSURL *url = [NSURL URLWithString:urlString];
 				NSString *episodeInfo = [NSString stringWithContentsOfURL:url encoding:NSUTF8StringEncoding error:nil];
 				if (episodeInfo) {
@@ -317,7 +320,7 @@ __DDLOGHERE__
 				}
 			}
        }
-		if (episodeNum.length && seasonNum.length) {
+        if (episodeNum.length && seasonNum.length && [episodeNum intValue] > 0 && [seasonNum intValue] > 0) {
 			//special case due to parsing of tivo's season/episode combined string
 			if (self.season > 0 && self.season/10 == [seasonNum intValue]  && [episodeNum intValue] == self.episode) {
 				//must have mis-parsed, so let's fix
@@ -329,9 +332,16 @@ __DDLOGHERE__
 				//both sources have sea/epi; so compare for report
 				if ([episodeNum intValue] != self.episode || [seasonNum intValue] != self.season) {
 					NSString * details = [NSString stringWithFormat:@"%@/%@ v our %d/%d; %@ aired %@; %@ ",seasonNum, episodeNum, self.season, self.episode, [self episodeIDForReporting], self.originalAirDateNoTime,  [self urlForReporting:seriesIDTVDB]];
-					DDLogDetail(@"TheTVDB has different Sea/Eps info for %@: %@", self.showTitle, details );
+					DDLogDetail(@"TheTVDB has different Sea/Eps info for %@: %@ %@", self.showTitle, details, [[NSUserDefaults standardUserDefaults] boolForKey:kMTTrustTVDB] ? @"updating": @"leaving" );
 					tiVoManager.theTVDBStatistics[kMTVDBWrongInfo@"Count"] = @([tiVoManager.theTVDBStatistics[kMTVDBWrongInfo@"Count"] intValue] + 1);
 					[((NSMutableDictionary *)tiVoManager.theTVDBStatistics[kMTVDBWrongInfo@"List"]) setValue:  details forKey:self.showTitle  ];
+                    if ([[NSUserDefaults standardUserDefaults] boolForKey:kMTTrustTVDB]) {
+                        //user asked us to prefer TVDB
+                        self.episodeNumber = [NSString stringWithFormat:@"%d%02d",
+                                              [seasonNum intValue], [episodeNum intValue]];
+                        self.episode = [episodeNum intValue];
+                        self.season = [seasonNum intValue];
+                    }
 				} else {
 					tiVoManager.theTVDBStatistics[kMTVDBRightInfo] = @([tiVoManager.theTVDBStatistics[kMTVDBRightInfo] intValue] + 1);
 				}
@@ -345,10 +355,7 @@ __DDLOGHERE__
 		}
 
         if (artwork.length) self.tvdbArtworkLocation = artwork;
-		DDLogVerbose(@"Remaining Operations: %ld",self.tiVo.queue.operationCount);
-		if (self.tiVo.queue.operationCount ==1) {  //we're the last one to load on this tivo, so print out stats.
-			DDLogMajor(@"Statistics for TVDB since start or reset: %@",tiVoManager.theTVDBStatistics);
-		}
+
     }
 }
 
@@ -416,9 +423,15 @@ __DDLOGHERE__
 
 -(BOOL) isEqual:(id)object {
 	MTTiVoShow * show = (MTTiVoShow *) object;
-	return [self.showTitle isEqual: show.showTitle] &&
+	return [self.showTitle isEqualToString: show.showTitle] &&
 			self. showID == show.showID &&
-		   [self.tiVoName isEqual: show.tiVoName];
+		   [self.tiVoName isEqualToString: show.tiVoName];
+}
+
+-(NSUInteger) hash {
+    return [self.showTitle hash] ^
+            self.showID ^
+             [self.tiVoName hash];
 }
 
 -(void) setShowSeriesAndEpisodeFrom:(NSString *) newTitle {
@@ -700,14 +713,14 @@ __DDLOGHERE__
 		} else {
 			MP4TagsSetName(tags,[self.episodeTitle cStringUsingEncoding:NSUTF8StringEncoding]);
 		}
-		uint32_t episodeNum = self.episode;
+		uint32_t episodeNum = (uint32_t) self.episode;
 		if (episodeNum == 0) {
-			episodeNum =  [self.episodeNumber intValue];
+			episodeNum = (uint32_t) [self.episodeNumber integerValue];
 		}
 		if (episodeNum> 0) {
 			MP4TagsSetTVEpisode(tags, &episodeNum);
 			MP4TagTrack track;
-			track.index = episodeNum;
+			track.index = (uint16)episodeNum;
 			track.total = 0;
 			MP4TagsSetTrack(tags, &track);
 			
@@ -984,7 +997,7 @@ __DDLOGHERE__
 -(void)setSeriesTitle:(NSString *)seriesTitle
 {
 	if (_seriesTitle != seriesTitle) {
-		_seriesTitle = seriesTitle;
+        _seriesTitle =seriesTitle;
 		if (_episodeTitle.length > 0 ) {
 			self.showTitle =[NSString stringWithFormat:@"%@: %@",_seriesTitle, _episodeTitle];
 		} else {
@@ -1071,6 +1084,7 @@ __DDLOGHERE__
 
 -(void)dealloc
 {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     self.showTitle = nil;
     self.showDescription = nil;
     self.tiVo = nil;

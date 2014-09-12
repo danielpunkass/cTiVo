@@ -34,8 +34,8 @@ __DDLOGHERE__
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadData) name:kMTNotificationTiVoListUpdated object:nil];
  	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showTiVoColumn:) name:kMTNotificationFoundMultipleTiVos object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshAddToQueueButton:) name:kMTNotificationDownloadQueueUpdated object:nil];
-	[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:kMTShowCopyProtected options:NSKeyValueChangeSetting context:nil];
-	[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:kMTShowSuggestions options:NSKeyValueChangeSetting context:nil];
+	[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:kMTShowCopyProtected options:NSKeyValueObservingOptionInitial context:nil];
+	[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:kMTShowSuggestions options:NSKeyValueObservingOptionInitial context:nil];
 	
 	[self  setDraggingSourceOperationMask:NSDragOperationMove forLocal:NO];
 	[self  setDraggingSourceOperationMask:NSDragOperationCopy forLocal:YES];
@@ -66,7 +66,7 @@ __DDLOGHERE__
 
 -(void) reloadData {
     //Configure Table Columns depending on how many TiVos
-	DDLogDetail(@"Reload Program Table");
+	DDLogVerbose(@"Reload Program Table");
 	//save selection to preserve after reloadData
 	NSIndexSet * selectedRowIndexes = [self selectedRowIndexes];
     NSArray * selectedShows = [self.sortedShows objectsAtIndexes:selectedRowIndexes];
@@ -117,9 +117,7 @@ __DDLOGHERE__
     tiVoColumnHolder = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
-#pragma find/filter support
-
-#pragma mark - Table Delegate Protocol
+#pragma mark find/filter support
 
 -(void) showFindField: (BOOL) show {
 	[self.findText setHidden:!show];
@@ -165,12 +163,15 @@ __DDLOGHERE__
 		DDLogMajor(@"Error invalid textField %@", notification.object);
 		return;
 	}
-	int movementCode = notification.userInfo[@"NSTextMovement"];
+	int movementCode = [notification.userInfo[@"NSTextMovement"] intValue];
 	DDLogVerbose(@"Ending FindText = %@",self.findText.stringValue);
 	if (movementCode == NSCancelTextMovement || [self.findText.stringValue isEqualToString:@""]) {
 		[self showFindField:NO];
 	}
 }
+
+#pragma mark - Table Delegate Protocol
+
 
 -(IBAction)selectTivo:(id)sender
 {
@@ -256,8 +257,8 @@ __DDLOGHERE__
 -(void) tableViewColumnDidResize:(NSNotification *) notification {
 
 	NSTableColumn * column = notification.userInfo[@"NSTableColumn"];
-	if ([column.identifier compare:@"Date" ] ==NSOrderedSame) {
-		NSInteger columnNum = [self columnWithIdentifier:@"Date"];
+    if (([column.identifier compare:@"Date" ] ==NSOrderedSame) || ([column.identifier compare:@"icon" ] ==NSOrderedSame)) {
+        NSInteger columnNum = [self columnWithIdentifier:column.identifier];
 		[self reloadDataForRowIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0,self.sortedShows.count)]
 							 columnIndexes:[NSIndexSet indexSetWithIndex:columnNum]];
 	}
@@ -357,11 +358,12 @@ __DDLOGHERE__
 		result.textField.stringValue = thisShow.episodeGenre;
         result.toolTip = result.textField.stringValue;
 	} else if ([tableColumn.identifier compare:@"FirstAirDate"] == NSOrderedSame) {
-		result.textField.stringValue = thisShow.originalAirDateNoTime ? thisShow.originalAirDateNoTime : @"";
+		result.textField.stringValue = thisShow.originalAirDateNoTime ?: @"";
 	} else if ([tableColumn.identifier isEqualToString:@"icon"]) {
         NSString * imageName = thisShow.imageString;
 		result.imageView.autoresizingMask = NSViewMinXMargin | NSViewMaxXMargin| NSViewMinYMargin |NSViewMaxYMargin;
-		result.imageView.image = [NSImage imageNamed: imageName];
+		result.autoresizingMask = NSViewMinXMargin | NSViewMaxXMargin| NSViewMinYMargin |NSViewMaxYMargin;
+        result.imageView.image = [NSImage imageNamed: imageName];
 		result.toolTip = [[imageName stringByReplacingOccurrencesOfString:@"-" withString:@" "] capitalizedString];
 	}
     result.textField.font = [[NSFontManager sharedFontManager] convertFont:result.textField.font toNotHaveTrait:NSFontBoldTrait];

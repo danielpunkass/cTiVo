@@ -28,7 +28,7 @@
 
 @interface MTTiVo ()
 @property SCNetworkReachabilityRef reachability;
-@property (nonatomic, weak) NSArray *downloadQueue;
+@property (nonatomic, readonly) NSArray *downloadQueue;
 @end
 
 @implementation MTTiVo
@@ -57,8 +57,8 @@ __DDLOGHERE__
         return nil;
     }
     MTNetService *tiVo = [MTNetService new];
-    tiVo.userPortSSL = [description[kMTTiVoUserPortSSL] intValue];
-    tiVo.userPort = [description[kMTTiVoUserPort] intValue];
+    tiVo.userPortSSL = [description[kMTTiVoUserPortSSL]shortValue];
+    tiVo.userPort = [description[kMTTiVoUserPort] shortValue];
     tiVo.userName = description[kMTTiVoUserName];
     tiVo.iPAddress = description[kMTTiVoIPAddress];
     MTTiVo *thisTiVo = [MTTiVo tiVoWithTiVo:tiVo withOperationQueue:queue manual:YES withID:[description[kMTTiVoID] intValue]];
@@ -279,7 +279,7 @@ void tivoNetworkCallback    (SCNetworkReachabilityRef target,
     BOOL foundMediaKey = NO;
     NSArray *savedTiVos = tiVoManager.savedTiVos;
     if (savedTiVos.count == 0) {
-        NSLog(@"No Media Key to Crib");
+        DDLogDetail(@"No Media Key to Crib");
         return;
     }
 
@@ -420,7 +420,7 @@ void tivoNetworkCallback    (SCNetworkReachabilityRef target,
 
 -(void)parserElement:(NSString*) elementName {
 	//just gives a shorter method name for DDLog
-	DDLogVerbose(@"%@:  %@ --> %@",_tiVo.name,elementName,element);
+	DDLogDetail(@"%@:  %@ --> %@",_tiVo.name,elementName,element);
 }
 
 -(void)parser:(NSXMLParser *)parser didEndElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qName
@@ -675,7 +675,7 @@ void tivoNetworkCallback    (SCNetworkReachabilityRef target,
 				managingDownloads = NO;
 				return;
 			}
-            if (s.isNew && (tiVoManager.numEncoders < kMTMaxNumDownloaders)) {
+            if (s.isNew && (tiVoManager.numEncoders < [[NSUserDefaults standardUserDefaults] integerForKey: kMTMaxNumDownloaders])) {
                 if(s.show.tiVo.isReachable) {  //isn't this self.isReachable?
 					tiVoManager.numEncoders++;
 					DDLogMajor(@"Num encoders after increment in MTTiVo %@ for show \"%@\"  is %d",self.tiVo.name,s.show.showTitle, tiVoManager.numEncoders);
